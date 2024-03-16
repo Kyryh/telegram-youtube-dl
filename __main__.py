@@ -1,7 +1,7 @@
 import logging
 
 from telegram import Update, MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler, InvalidCallbackData
 from pyrogram import Client as MPTProtoClient
 
 from yt_dlp import YoutubeDL, FFmpegPostProcessor
@@ -161,6 +161,9 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update.effective_chat.send_message(e)
     remove(filename)
 
+async def invalid_callbackquery(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    update.callback_query.answer(text='Button is no longer valid', show_alert=True)
+
 async def post_init(application: Application):
     await mtprotoclient.start()
 
@@ -171,7 +174,8 @@ def main():
     application.add_handler(MessageHandler(~filters.User(ALLOWED_USER_IDS), not_allowed))
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.Entity(MessageEntity.URL) | filters.Entity(MessageEntity.TEXT_LINK), handle_links))
-    application.add_handler(CallbackQueryHandler(try_download))
+    application.add_handler(CallbackQueryHandler(try_download, dict))
+    application.add_handler(CallbackQueryHandler(invalid_callbackquery, InvalidCallbackData))
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
