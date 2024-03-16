@@ -2,8 +2,9 @@ import logging
 
 from telegram import Update, MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
-from yt_dlp import YoutubeDL
-from os import getenv
+from yt_dlp import YoutubeDL, FFmpegPostProcessor
+from os import getenv, remove
+import urllib3
 
 __import__("dotenv").load_dotenv()
 
@@ -57,40 +58,76 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
                     "format_sort": ["+size","+br","+res","+fps"]
                 }
             })
-        ],
-        [
-            InlineKeyboardButton("Audio", callback_data=params | {
-                "ytdl_options": {
-                    "format": "bestaudio",
-                    "postprocessors": [
-                        {
-                            "key": "FFmpegExtractAudio",
-                            "preferredcodec": "wav"
-                        }
-                    ]
-                },
-                "audio": True
-            })
         ]
     ]
+
+    if FFmpegPostProcessor.available:
+        keyboard.append(
+            [
+                InlineKeyboardButton("Audio", callback_data=params | {
+                    "ytdl_options": {
+                        "format": "bestaudio",
+                        "postprocessors": [
+                            {
+                                "key": "FFmpegExtractAudio",
+                                "preferredcodec": "mp3"
+                            }
+                        ]
+                    },
+                    "audio": True
+                })
+            ]
+        )
     
 
-    await context.bot.send_photo(
-        chat_id=chat_id,
-        photo=video_info['thumbnail'],
-        caption=video_info['title'],
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    if "thumbnail" in video_info:
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=video_info['thumbnail'],
+            caption=video_info.get('title'),
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+    else:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            caption=video_info.get('title') or "Video",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
 
 
 
 async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.callback_query.answer()
     data = update.callback_query.data
+
+    await update.effective_message.delete()
+    msg = await update.effective_chat.send_message(
+        "Downloading content..."
+    )
 
     data["ytdl_options"]["outtmpl"] = "temp"
     with YoutubeDL(data["ytdl_options"]) as ydl:
         download_result = ydl.extract_info(data["url"])
-        filename = "temp." + ("wav" if data["audio"] else download_result["ext"])
+        filename = "temp." + ("mp3" if data["audio"] else download_result["ext"])
+    
+    await msg.delete()
+
+    if data["audio"]:
+        msg = await update.effective_chat.send_message(
+            "Sending audio file..."
+        )
+        await update.effective_chat.send_audio(
+            audio=filename,
+            performer = download_result.get("uploader"),
+            title = download_result.get("title"),
+            thumbnail = urllib3.request("GET", download_result.get("thumbnail")).data
+        )
+        await msg.delete()
+    else:
+        # TODO
+        pass
+        
+    remove(filename)
 
 
 def main():
