@@ -2,9 +2,12 @@ import logging
 
 from telegram import Update, MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler
+from pyrogram import Client as MPTProtoClient
+
 from yt_dlp import YoutubeDL, FFmpegPostProcessor
 from os import getenv, remove
 import urllib3
+from io import BytesIO
 
 __import__("dotenv").load_dotenv()
 
@@ -22,6 +25,16 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 # logger.addHandler(fh)
 
+TOKEN = getenv("TOKEN")
+
+API_ID, API_HASH = getenv("API_ID"), getenv("API_HASH")
+
+mtprotoclient = None
+if API_ID and API_HASH:
+    mtprotoclient = MPTProtoClient("bot", API_ID, API_HASH, bot_token=TOKEN)
+
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text("Welcome to the bot!\nYou can start downloading videos by simply sending the link(s)")
 
@@ -32,11 +45,16 @@ async def handle_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for url in update.effective_message.parse_entities([MessageEntity.URL, MessageEntity.TEXT_LINK]).values():
         await show_download_options(url, update.effective_chat.id, context)
 
+
+
 async def show_download_options(url: str, chat_id: int, context: ContextTypes.DEFAULT_TYPE):
 
-    with YoutubeDL() as ydl:
-        video_info = ydl.extract_info(url, download=False)
-
+    try:
+        with YoutubeDL() as ydl:
+            video_info = ydl.extract_info(url, download=False)
+    except Exception as e:
+        logger.warning(e)
+        return
     params = {
         "thumbnail": video_info['thumbnail'],
         "duration": video_info['duration'],
@@ -103,39 +121,52 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Downloading content..."
     )
 
-    data["ytdl_options"]["outtmpl"] = "temp"
-    with YoutubeDL(data["ytdl_options"]) as ydl:
-        download_result = ydl.extract_info(data["url"])
-        filename = "temp." + ("mp3" if data["audio"] else download_result["ext"])
-    
-    await msg.delete()
-
-    if data["audio"]:
-        msg = await update.effective_chat.send_message(
-            "Sending audio file..."
-        )
-        await update.effective_chat.send_audio(
-            audio=filename,
-            performer = download_result.get("uploader"),
-            title = download_result.get("title"),
-            thumbnail = urllib3.request("GET", download_result.get("thumbnail")).data
-        )
-        await msg.delete()
-    else:
-        msg = await update.effective_chat.send_message(
-            "Sending video file..."
-        )
-        await update.effective_chat.send_video(
-            video=filename,
-            supports_streaming=True
-        )
-        await msg.delete()
+    try:
+        data["ytdl_options"]["outtmpl"] = "temp"
+        with YoutubeDL(data["ytdl_options"]) as ydl:
+            download_result = ydl.extract_info(data["url"])
+            filename = "temp." + ("mp3" if data["audio"] else download_result["ext"])
         
+        await msg.delete()
+
+        if data["audio"]:
+            msg = await update.effective_chat.send_message(
+                "Sending audio file..."
+            )
+            await update.effective_chat.send_audio(
+                audio=filename,
+                performer = download_result.get("uploader"),
+                title = download_result.get("title"),
+                thumbnail = urllib3.request("GET", download_result.get("thumbnail")).data
+            )
+            await msg.delete()
+        else:
+            msg = await update.effective_chat.send_message(
+                "Sending video file..."
+            )
+            if mtprotoclient:
+                await mtprotoclient.send_video(
+                    chat_id=update.effective_chat.id,
+                    video=filename,
+                    duration=data.get("duration"),
+                    thumb= BytesIO(urllib3.request("GET", download_result.get("thumbnail")).data) 
+                )
+            else:
+                await update.effective_chat.send_video(
+                    video=filename,
+                    supports_streaming=True
+                )
+            await msg.delete()
+    except Exception as e:
+        update.effective_chat.send_message(e)
     remove(filename)
+
+async def post_init(application: Application):
+    await mtprotoclient.start()
 
 
 def main():
-    application = Application.builder().token(getenv("TOKEN")).arbitrary_callback_data(True).build()
+    application = Application.builder().token(TOKEN).arbitrary_callback_data(True).post_init(post_init).build()
 
     application.add_handler(MessageHandler(~filters.User(ALLOWED_USER_IDS), not_allowed))
     application.add_handler(CommandHandler("start", start))
