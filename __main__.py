@@ -48,36 +48,34 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
         [
             InlineKeyboardButton("Video, highest quality", callback_data=params | {
                 "ytdl_options": {
-                    
+                    "merge_output_format": "mp4",
                 }
             })
         ],
         [
             InlineKeyboardButton("Video, lowest filesize", callback_data=params | {
                 "ytdl_options": {
+                    "merge_output_format": "mp4",
                     "format_sort": ["+size","+br","+res","+fps"]
                 }
+            })
+        ],
+        [
+            InlineKeyboardButton("Audio", callback_data=params | {
+                "ytdl_options": {
+                    "format": "bestaudio",
+                    "postprocessors": [
+                        {
+                            "key": "FFmpegExtractAudio",
+                            "preferredcodec": "mp3"
+                        }
+                    ]
+                },
+                "audio": True
             })
         ]
     ]
 
-    if FFmpegPostProcessor.available:
-        keyboard.append(
-            [
-                InlineKeyboardButton("Audio", callback_data=params | {
-                    "ytdl_options": {
-                        "format": "bestaudio",
-                        "postprocessors": [
-                            {
-                                "key": "FFmpegExtractAudio",
-                                "preferredcodec": "mp3"
-                            }
-                        ]
-                    },
-                    "audio": True
-                })
-            ]
-        )
     
 
     if "thumbnail" in video_info:
@@ -124,8 +122,14 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await msg.delete()
     else:
-        # TODO
-        pass
+        msg = await update.effective_chat.send_message(
+            "Sending video file..."
+        )
+        await update.effective_chat.send_video(
+            video=filename,
+            supports_streaming=True
+        )
+        await msg.delete()
         
     remove(filename)
 
