@@ -158,11 +158,12 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             await msg.delete()
     except Exception as e:
-        update.effective_chat.send_message(e)
+        await update.effective_chat.send_message(e)
+        raise e
     remove(filename)
 
 async def invalid_callbackquery(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    update.callback_query.answer(text='Button is no longer valid', show_alert=True)
+    await update.callback_query.answer(text='Button is no longer valid', show_alert=True)
 
 async def post_init(application: Application):
     await mtprotoclient.start()
