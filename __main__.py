@@ -33,7 +33,7 @@ API_ID, API_HASH = getenv("API_ID"), getenv("API_HASH")
 
 mtprotoclient = None
 if API_ID and API_HASH:
-    mtprotoclient = MPTProtoClient("bot", API_ID, API_HASH, bot_token=TOKEN)
+    mtprotoclient = MPTProtoClient("bot", API_ID, API_HASH, bot_token=TOKEN, no_updates=True)
 
 
 
