@@ -55,7 +55,7 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
         with YoutubeDL() as ydl:
             video_info = ydl.extract_info(url, download=False)
     except Exception as e:
-        context.bot.send_message(chat_id, e)
+        await context.bot.send_message(chat_id, e)
         logger.warning(e)
         return
     params = {
