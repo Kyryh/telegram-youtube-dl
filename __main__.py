@@ -4,7 +4,7 @@ from telegram import Update, MessageEntity, InlineKeyboardMarkup, InlineKeyboard
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler, InvalidCallbackData
 from pyrogram import Client as MPTProtoClient
 
-from yt_dlp import YoutubeDL
+from yt_dlp import YoutubeDL, DownloadError
 from os import getenv, remove
 import urllib3
 from io import BytesIO
@@ -54,13 +54,25 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
     try:
         with YoutubeDL() as ydl:
             video_info = ydl.extract_info(url, download=False)
+    except DownloadError as e:
+        if "Unsupported URL" in e.msg:
+            await context.bot.send_message(chat_id, "Unsupported URL")
+            return
+        await context.bot.send_message(chat_id, e)
+        if (chat_id != OWNER_USER_ID):
+            await context.bot.send_message(OWNER_USER_ID, f"User {chat_id} just had the following exception:\n\n{e}")
+        logger.error(e)
+        return
     except Exception as e:
         await context.bot.send_message(chat_id, e)
-        logger.warning(e)
+        if (chat_id != OWNER_USER_ID):
+            await context.bot.send_message(OWNER_USER_ID, f"User {chat_id} just had the following exception:\n\n{e}")
+        logger.error(e)
         return
+    
     params = {
-        "thumbnail": video_info['thumbnail'],
-        "duration": video_info['duration'],
+        "thumbnail": video_info.get('thumbnail'),
+        "duration": video_info.get('duration'),
         "url": url,
         "audio": False
     }
@@ -129,9 +141,11 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with YoutubeDL(data["ytdl_options"]) as ydl:
             download_result = ydl.extract_info(data["url"])
         
-        filename = "temp." + ("mp3" if data["audio"] else "mp4")
+        filename = "temp." + ("mp3" if data["audio"] else download_result["ext"])
 
         await msg.delete()
+
+        thumb = download_result.get("thumbnail")
 
         if data["audio"]:
             msg = await update.effective_chat.send_message(
@@ -141,7 +155,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 audio=filename,
                 performer = download_result.get("uploader"),
                 title = download_result.get("title"),
-                thumbnail = urllib3.request("GET", download_result.get("thumbnail")).data
+                thumbnail = urllib3.request("GET", thumb).data if thumb else None
             )
             await msg.delete()
         else:
@@ -153,7 +167,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.effective_chat.id,
                     video=filename,
                     duration=data.get("duration"),
-                    thumb= BytesIO(urllib3.request("GET", download_result.get("thumbnail")).data),
+                    thumb= BytesIO(urllib3.request("GET", thumb).data) if thumb else None,
                     width=download_result.get("width"),
                     height=download_result.get("height"),
                     supports_streaming=True
@@ -165,8 +179,11 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             await msg.delete()
     except Exception as e:
-        await update.effective_chat.send_message(e)
-        raise e
+        await update.effective_chat.send_message(f"Something unexpected happened:\n\n{e}")
+        if (update.effective_chat != OWNER_USER_ID):
+            await context.bot.send_message(OWNER_USER_ID, f"User {update.effective_chat} just had the following exception:\n\n{e}")
+        logger.error(e)
+        return
     remove(filename)
 
 async def invalid_callbackquery(update: Update, context: ContextTypes.DEFAULT_TYPE):
