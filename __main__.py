@@ -4,7 +4,7 @@ from telegram import Update, MessageEntity, InlineKeyboardMarkup, InlineKeyboard
 from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler, InvalidCallbackData
 from pyrogram import Client as MPTProtoClient
 
-from yt_dlp import YoutubeDL, FFmpegPostProcessor
+from yt_dlp import YoutubeDL
 from os import getenv, remove
 import urllib3
 from io import BytesIO
@@ -55,6 +55,7 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
         with YoutubeDL() as ydl:
             video_info = ydl.extract_info(url, download=False)
     except Exception as e:
+        context.bot.send_message(chat_id, e)
         logger.warning(e)
         return
     params = {
@@ -127,8 +128,9 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data["ytdl_options"]["outtmpl"] = "temp"
         with YoutubeDL(data["ytdl_options"]) as ydl:
             download_result = ydl.extract_info(data["url"])
-            filename = "temp." + ("mp3" if data["audio"] else download_result["ext"])
         
+        filename = "temp." + ("mp3" if data["audio"] else "mp4")
+
         await msg.delete()
 
         if data["audio"]:
@@ -151,7 +153,10 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=update.effective_chat.id,
                     video=filename,
                     duration=data.get("duration"),
-                    thumb= BytesIO(urllib3.request("GET", download_result.get("thumbnail")).data) 
+                    thumb= BytesIO(urllib3.request("GET", download_result.get("thumbnail")).data),
+                    width=download_result.get("width"),
+                    height=download_result.get("height"),
+                    supports_streaming=True
                 )
             else:
                 await update.effective_chat.send_video(
