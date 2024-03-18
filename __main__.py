@@ -181,7 +181,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         await update.effective_chat.send_message(f"Something unexpected happened:\n\n{e}")
         if (update.effective_chat != OWNER_USER_ID):
-            await context.bot.send_message(OWNER_USER_ID, f"User {update.effective_chat} just had the following exception:\n\n{e}")
+            await context.bot.send_message(OWNER_USER_ID, f"User {update.effective_chat.id} just had the following exception:\n\n{e}")
         logger.error(e)
         return
     remove(filename)
