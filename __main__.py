@@ -8,6 +8,7 @@ from yt_dlp import YoutubeDL, DownloadError
 from os import getenv, remove
 import urllib3
 from io import BytesIO
+from time import time
 
 __import__("dotenv").load_dotenv()
 
@@ -138,6 +139,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         data["ytdl_options"]["outtmpl"] = "temp"
+        # Download the video
         with YoutubeDL(data["ytdl_options"]) as ydl:
             download_result = ydl.extract_info(data["url"])
         
@@ -163,6 +165,13 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "Sending video file..."
             )
             if mtprotoclient:
+
+                async def progress_hook(current, total):
+                    current_time = time()
+                    if current_time - context.bot_data["messages"].get((msg.chat_id, msg.id), 0) >= 5:
+                        context.bot_data["messages"][(msg.chat_id, msg.id)] = current_time
+                        await context.bot.edit_message_text(f"Sending video file...\n{round(current/total*100)}%", msg.chat_id, msg.id)
+
                 await mtprotoclient.send_video(
                     chat_id=update.effective_chat.id,
                     video=filename,
@@ -170,7 +179,8 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     thumb= BytesIO(urllib3.request("GET", thumb).data) if thumb else None,
                     width=download_result.get("width"),
                     height=download_result.get("height"),
-                    supports_streaming=True
+                    supports_streaming=True,
+                    progress=progress_hook
                 )
             else:
                 await update.effective_chat.send_video(
@@ -180,7 +190,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.delete()
     except Exception as e:
         await update.effective_chat.send_message(f"Something unexpected happened:\n\n{e}")
-        if (update.effective_chat != OWNER_USER_ID):
+        if (update.effective_chat.id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {update.effective_chat.id} just had the following exception:\n\n{e}")
         logger.error(e)
         return
@@ -201,6 +211,8 @@ def main():
     application.add_handler(MessageHandler(filters.Entity(MessageEntity.URL) | filters.Entity(MessageEntity.TEXT_LINK), handle_links))
     application.add_handler(CallbackQueryHandler(try_download, dict))
     application.add_handler(CallbackQueryHandler(invalid_callbackquery, InvalidCallbackData))
+
+    application.bot_data["messages"] = {}
 
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
