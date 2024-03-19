@@ -93,8 +93,11 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
                     "format_sort": ["+size","+br","+res","+fps"]
                 }
             })
-        ],
-        [
+        ]
+    ]
+
+    if any(format.get("audio_ext") != 'none' for format in video_info.get("formats")):
+        keyboard.append([
             InlineKeyboardButton("Audio", callback_data=params | {
                 "ytdl_options": {
                     "format": "bestaudio",
@@ -107,9 +110,7 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
                 },
                 "audio": True
             })
-        ]
-    ]
-
+        ])
     
 
     if "thumbnail" in video_info:
@@ -138,7 +139,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        data["ytdl_options"]["outtmpl"] = "temp"
+        data["ytdl_options"]["outtmpl"] = "temp.%(ext)s"
         # Download the video
         with YoutubeDL(data["ytdl_options"]) as ydl:
             download_result = ydl.extract_info(data["url"])
