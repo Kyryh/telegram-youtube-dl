@@ -176,10 +176,10 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await mtprotoclient.send_video(
                     chat_id=update.effective_chat.id,
                     video=filename,
-                    duration=data.get("duration"),
+                    duration=data.get("duration") or 0,
                     thumb= BytesIO(urllib3.request("GET", thumb).data) if thumb else None,
-                    width=download_result.get("width"),
-                    height=download_result.get("height"),
+                    width=download_result.get("width") or 0,
+                    height=download_result.get("height") or 0,
                     supports_streaming=True,
                     progress=progress_hook
                 )
