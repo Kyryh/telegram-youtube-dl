@@ -59,13 +59,13 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
         if "Unsupported URL" in e.msg or "[DRM]" in e.msg:
             await context.bot.send_message(chat_id, "Unsupported URL")
             return
-        await context.bot.send_message(f"Something unexpected happened:\n\n{e}")
+        await context.bot.send_message(chat_id, f"Something unexpected happened:\n\n{e}")
         if (chat_id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {chat_id} just had the following exception:\n\n{e}")
         logger.error(e)
         return
     except Exception as e:
-        await context.bot.send_message(f"Something unexpected happened:\n\n{e}")
+        await context.bot.send_message(chat_id, f"Something unexpected happened:\n\n{e}")
         if (chat_id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {chat_id} just had the following exception:\n\n{e}")
         logger.error(e)
