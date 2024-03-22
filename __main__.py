@@ -9,6 +9,7 @@ from os import getenv, remove
 import urllib3
 from io import BytesIO
 from time import time
+import json
 
 __import__("dotenv").load_dotenv()
 
@@ -132,6 +133,15 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
         )
 
 
+# i fucking hate asyncio so much it's unbelievable
+def edit_message(text: str, chat_id: int, message_id: int):
+    urllib3.request(
+        "POST",
+        f"https://api.telegram.org/bot{getenv('TOKEN')}/editMessageText",
+        headers={'Content-Type': 'application/json'},
+        body=json.dumps({"chat_id": chat_id, "message_id": message_id, "text": text})
+    )
+
 
 async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
@@ -144,6 +154,19 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         data["ytdl_options"]["outtmpl"] = "temp.%(ext)s"
+
+        def progress_hook(d: dict):
+            if d["status"] == "downloading" and d.get("total_bytes"):
+                current_time = time()
+                if current_time - context.bot_data["messages"].get((msg.chat_id, msg.id), 0) >= 5:
+                    context.bot_data["messages"][(msg.chat_id, msg.id)] = current_time
+
+                    # TODO: find a way to call context.bot.edit_message_text 
+                    edit_message(f"Downloading content...\n{round(d['downloaded_bytes']/d['total_bytes']*100)}%", msg.chat_id, msg.id)
+                    
+                         
+        data["ytdl_options"]["progress_hooks"] = [progress_hook]
+
         # Download the video
         with YoutubeDL(data["ytdl_options"]) as ydl:
             download_result = ydl.extract_info(data["url"])
