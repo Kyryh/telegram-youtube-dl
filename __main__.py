@@ -83,6 +83,8 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
             InlineKeyboardButton("Video, highest quality", callback_data=params | {
                 "ytdl_options": {
                     "merge_output_format": "mp4",
+                    "format_sort": [f"filesize:{'2G' if mtprotoclient else '50M'}"],
+                    "max_filesize": 2_000_000_000 if mtprotoclient else 50_000_000
                 }
             })
         ],
@@ -90,7 +92,9 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
             InlineKeyboardButton("Video, lowest filesize", callback_data=params | {
                 "ytdl_options": {
                     "merge_output_format": "mp4",
-                    "format_sort": ["+size","+br","+res","+fps"]
+                    "format_sort": ["+size","+br","+res","+fps"],
+                    "max_filesize": 2_000_000_000 if mtprotoclient else 50_000_000
+
                 }
             })
         ]
@@ -143,6 +147,9 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Download the video
         with YoutubeDL(data["ytdl_options"]) as ydl:
             download_result = ydl.extract_info(data["url"])
+            
+            if download_result["requested_downloads"][0]["filesize_approx"] > (2_000_000_000 if mtprotoclient else 50_000_000):
+                raise Exception("Filesize too large")
         
         filename = "temp." + ("mp3" if data["audio"] else download_result["ext"])
 
@@ -201,7 +208,8 @@ async def invalid_callbackquery(update: Update, context: ContextTypes.DEFAULT_TY
     await update.callback_query.answer(text='Button is no longer valid', show_alert=True)
 
 async def post_init(application: Application):
-    await mtprotoclient.start()
+    if mtprotoclient is not None:
+        await mtprotoclient.start()
 
 
 def main():
