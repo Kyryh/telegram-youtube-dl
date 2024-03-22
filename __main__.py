@@ -5,7 +5,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from pyrogram import Client as MPTProtoClient
 
 from yt_dlp import YoutubeDL, DownloadError
-from os import getenv, remove
+from os import getenv, remove, listdir
 import urllib3
 from io import BytesIO
 from time import time
@@ -229,8 +229,13 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (update.effective_chat.id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {update.effective_chat.id} just had the following exception:\n\n{e}")
         logger.error(e)
-        return
+    
     remove(filename)
+    for file in listdir("."):
+        if file.endswith(".part"):
+            remove(file)
+
+
 
 async def invalid_callbackquery(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer(text='Button is no longer valid', show_alert=True)
