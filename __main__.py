@@ -171,7 +171,8 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with YoutubeDL(data["ytdl_options"]) as ydl:
             download_result = ydl.extract_info(data["url"])
             
-            if download_result["requested_downloads"][0]["filesize_approx"] > (2_000_000_000 if mtprotoclient else 50_000_000):
+
+            if download_result["requested_downloads"][0].get("filesize_approx", 0) > (2_000_000_000 if mtprotoclient else 50_000_000):
                 raise Exception("Filesize too large")
         
         filename = "temp." + ("mp3" if data["audio"] else download_result["ext"])
@@ -209,7 +210,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await mtprotoclient.send_video(
                     chat_id=update.effective_chat.id,
                     video=filename,
-                    duration=data.get("duration") or 0,
+                    duration=int(data.get("duration")) or 0,
                     thumb= BytesIO(urllib3.request("GET", thumb).data) if thumb else None,
                     width=download_result.get("width") or 0,
                     height=download_result.get("height") or 0,
@@ -229,6 +230,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if (update.effective_chat.id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {update.effective_chat.id} just had the following exception:\n\n{e}")
         logger.error(e)
+        raise e
     
     remove(filename)
     for file in listdir("."):
