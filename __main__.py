@@ -153,7 +153,6 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     try:
-        data["ytdl_options"]["outtmpl"] = "temp.%(ext)s"
 
         def progress_hook(d: dict):
             if d["status"] == "downloading" and d.get("total_bytes"):
@@ -164,8 +163,9 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     # TODO: find a way to call context.bot.edit_message_text 
                     edit_message(f"Downloading content...\n{round(d['downloaded_bytes']/d['total_bytes']*100)}%", msg.chat_id, msg.id)
                     
-                         
         data["ytdl_options"]["progress_hooks"] = [progress_hook]
+
+        data["ytdl_options"]["outtmpl"] = "temp.%(ext)s"
 
         # Download the video
         with YoutubeDL(data["ytdl_options"]) as ydl:
@@ -179,6 +179,9 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await msg.delete()
 
         thumb = download_result.get("thumbnail")
+
+
+        # Send the content (video or audio)
 
         if data["audio"]:
             msg = await update.effective_chat.send_message(
@@ -219,6 +222,8 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     supports_streaming=True
                 )
             await msg.delete()
+
+
     except Exception as e:
         await update.effective_chat.send_message(f"Something unexpected happened:\n\n{e}")
         if (update.effective_chat.id != OWNER_USER_ID):
