@@ -1,7 +1,7 @@
 import logging
 
 from telegram import Update, MessageEntity, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler, InvalidCallbackData
+from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, CallbackQueryHandler, InvalidCallbackData, ApplicationHandlerStop, TypeHandler
 from pyrogram import Client as MPTProtoClient
 
 from yt_dlp import YoutubeDL, DownloadError
@@ -15,7 +15,10 @@ __import__("dotenv").load_dotenv()
 
 OWNER_USER_ID = int(getenv("OWNER_USER_ID") or 0)
 
-ALLOWED_USER_IDS = [int(userid or 0) for userid in getenv("ALLOWED_USER_IDS").split(",")] + [OWNER_USER_ID]
+if getenv("ALLOWED_USER_IDS") != "ALL":
+    ALLOWED_USER_IDS = [int(userid or 0) for userid in getenv("ALLOWED_USER_IDS").split(",")] + [OWNER_USER_ID]
+else:
+    ALLOWED_USER_IDS = None
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -43,7 +46,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text("Welcome to the bot!\nYou can start downloading videos by simply sending the link(s)")
 
 async def not_allowed(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.effective_message.reply_text(f"You're not allowed to use this bot.\nYour user id: {update.effective_user.id}")
+    if ALLOWED_USER_IDS is not None and update.effective_chat.id not in ALLOWED_USER_IDS:
+        await update.effective_message.reply_text(f"You're not allowed to use this bot.\nYour user id: {update.effective_user.id}")
+        raise ApplicationHandlerStop 
 
 async def handle_links(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for url in update.effective_message.parse_entities([MessageEntity.URL, MessageEntity.TEXT_LINK]).values():
@@ -61,13 +66,13 @@ async def show_download_options(url: str, chat_id: int, context: ContextTypes.DE
             await context.bot.send_message(chat_id, "Unsupported URL")
             return
         await context.bot.send_message(chat_id, f"Something unexpected happened:\n\n{e}")
-        if (chat_id != OWNER_USER_ID):
+        if (OWNER_USER_ID != 0 and chat_id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {chat_id} just had the following exception:\n\n{e}")
         logger.error(e)
         return
     except Exception as e:
         await context.bot.send_message(chat_id, f"Something unexpected happened:\n\n{e}")
-        if (chat_id != OWNER_USER_ID):
+        if (OWNER_USER_ID != 0 and chat_id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {chat_id} just had the following exception:\n\n{e}")
         logger.error(e)
         return
@@ -227,7 +232,7 @@ async def try_download(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     except Exception as e:
         await update.effective_chat.send_message(f"Something unexpected happened:\n\n{e}")
-        if (update.effective_chat.id != OWNER_USER_ID):
+        if (OWNER_USER_ID != 0 and update.effective_chat.id != OWNER_USER_ID):
             await context.bot.send_message(OWNER_USER_ID, f"User {update.effective_chat.id} just had the following exception:\n\n{e}")
         logger.error(e)
         raise e
@@ -250,7 +255,7 @@ async def post_init(application: Application):
 def main():
     application = Application.builder().token(TOKEN).arbitrary_callback_data(True).post_init(post_init).build()
 
-    application.add_handler(MessageHandler(~filters.User(ALLOWED_USER_IDS), not_allowed))
+    application.add_handler(TypeHandler(Update, not_allowed), -1)
     application.add_handler(CommandHandler("start", start))
     application.add_handler(MessageHandler(filters.Entity(MessageEntity.URL) | filters.Entity(MessageEntity.TEXT_LINK), handle_links))
     application.add_handler(CallbackQueryHandler(try_download, dict))
